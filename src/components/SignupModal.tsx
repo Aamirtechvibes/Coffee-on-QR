@@ -1,77 +1,52 @@
 import { useState, useEffect } from 'react';
-import { X, ArrowRight, CheckCircle, AlertCircle, Loader } from 'lucide-react';
-import { saveLead, updateLeadPayment, type Lead } from '../lib/supabase';
+import { X, ArrowRight, CheckCircle, AlertCircle, Loader, Copy, Smartphone } from 'lucide-react';
+import { confirmLeadPayment, saveLead, type Lead } from '../lib/supabase';
 import BrandMark from './BrandMark';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 interface SignupModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type Step = 'form' | 'processing' | 'success' | 'error';
+type Step = 'form' | 'processing' | 'payment' | 'success' | 'error';
 
-declare global {
-  interface Window {
-    Razorpay: new (options: RazorpayOptions) => RazorpayInstance;
-  }
-}
-
-interface RazorpayOptions {
-  key: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  order_id?: string;
-  prefill: { name: string; contact: string };
-  theme: { color: string };
-  handler: (response: RazorpayResponse) => void;
-  modal: { ondismiss: () => void };
-}
-
-interface RazorpayResponse {
-  razorpay_payment_id: string;
-  razorpay_order_id?: string;
-  razorpay_signature?: string;
-}
-
-interface RazorpayInstance {
-  open: () => void;
-}
-
-function loadRazorpay(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true);
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.head.appendChild(script);
-  });
-}
+const UPI_ID = 'rubinakhan123462@okicici';
+const UPI_AMOUNT = '₹10,000.00';
+const UPI_QR_IMAGE = '/upi-qr-whatsapp.jpeg';
 
 export default function SignupModal({ isOpen, onClose }: SignupModalProps) {
   const [step, setStep] = useState<Step>('form');
   const [errorMsg, setErrorMsg] = useState('');
-  const [form, setForm] = useState({
-    name: '',
-    cafe_name: '',
-    phone: '',
-    city: '',
-    email: '',
-  });
+  const [copied, setCopied] = useState(false);
+  const [savedOffline, setSavedOffline] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [currentLeadId, setCurrentLeadId] = useState('');
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [form, setForm] = useState({ name: '', cafe_name: '', phone: '', city: '', email: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  useBodyScrollLock(isOpen);
+
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      setStep('form');
-      setErrors({});
-      setErrorMsg('');
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
+    if (typeof window === 'undefined') return;
+
+    const syncViewport = () => setIsMobile(window.innerWidth < 640);
+    syncViewport();
+    window.addEventListener('resize', syncViewport, { passive: true });
+    return () => window.removeEventListener('resize', syncViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setStep('form');
+    setErrors({});
+    setErrorMsg('');
+    setCopied(false);
+    setSavedOffline(false);
+    setCurrentLeadId('');
+    setConfirmingPayment(false);
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -94,95 +69,156 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps) {
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
+  const copyUpiId = async () => {
+    try {
+      await navigator.clipboard.writeText(UPI_ID);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2200);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-
     setStep('processing');
 
-    const lead: Lead = { ...form };
-    const { data, error } = await saveLead(lead);
+    try {
+      const lead: Lead = { ...form };
+      const { data, error } = await saveLead(lead);
 
-    if (error || !data) {
-      setErrorMsg(error ?? 'Something went wrong. Please try again.');
+      if (error || !data) {
+        setErrorMsg(error ?? 'Something went wrong. Please try again.');
+        setStep('error');
+        return;
+      }
+
+      setSavedOffline(String(data.id).startsWith('local-'));
+      setCurrentLeadId(data.id ?? '');
+      setStep('payment');
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
       setStep('error');
-      return;
     }
+  };
 
-    const razorpayLoaded = await loadRazorpay();
-    if (!razorpayLoaded) {
-      setErrorMsg('Payment gateway failed to load. Please refresh and try again.');
-      setStep('error');
-      return;
-    }
-
-    const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID as string;
-
-    if (!razorpayKey) {
-      await updateLeadPayment(data.id!, 'demo_payment', 'demo_order');
+  const handlePaymentConfirmation = async () => {
+    if (!currentLeadId) {
       setStep('success');
       return;
     }
 
-    const options: RazorpayOptions = {
-      key: razorpayKey,
-      amount: 199900,
-      currency: 'INR',
-      name: 'Coffee on QR',
-      description: 'Early Access — Loyalty System for Cafes',
-      prefill: { name: form.name, contact: form.phone },
-      theme: { color: '#3B82F6' },
-      handler: async (response: RazorpayResponse) => {
-        await updateLeadPayment(
-          data.id!,
-          response.razorpay_payment_id,
-          response.razorpay_order_id ?? ''
-        );
-        setStep('success');
-      },
-      modal: {
-        ondismiss: () => setStep('form'),
-      },
-    };
+    setConfirmingPayment(true);
 
-    const rzp = new window.Razorpay(options);
-    rzp.open();
+    try {
+      const { error } = await confirmLeadPayment({
+        leadId: currentLeadId,
+        confirmationMethod: 'upi_manual',
+        note: 'customer_clicked_payment_complete',
+      });
+
+      if (error) {
+        setErrorMsg(error);
+        setStep('error');
+        return;
+      }
+
+      setStep('success');
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Unable to confirm payment right now.');
+      setStep('error');
+    } finally {
+      setConfirmingPayment(false);
+    }
   };
 
-  const inputClass = (field: string) =>
-    `w-full bg-white/5 border ${
-      errors[field] ? 'border-red-500/50' : 'border-white/10'
-    } rounded-xl px-4 py-3.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500/50 focus:bg-white/8 transition-all duration-200`;
+  const inputBase: React.CSSProperties = {
+    width: '100%',
+    background: 'var(--bg-secondary)',
+    border: '1.5px solid var(--border-soft)',
+    borderRadius: '0.75rem',
+    padding: '0.75rem 0.875rem',
+    color: 'var(--text-primary)',
+    fontSize: '0.875rem',
+    fontFamily: 'Inter, sans-serif',
+    outline: 'none',
+    transition: 'all 0.2s ease',
+    WebkitAppearance: 'none',
+  };
+
+  const inputErr = (field: string): React.CSSProperties => ({
+    ...inputBase,
+    background: errors[field] ? 'rgba(239,68,68,0.04)' : 'var(--bg-secondary)',
+    border: `1.5px solid ${errors[field] ? 'rgba(239,68,68,0.40)' : 'var(--border-soft)'}`,
+  });
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0"
+        style={{ background: 'rgba(26,26,26,0.34)', backdropFilter: isMobile ? 'blur(4px)' : 'blur(8px)' }}
+        onClick={onClose}
+      />
 
-      <div className="relative w-full sm:max-w-md bg-[#111] border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden">
+      {/* Sheet / modal */}
+      <div
+        className="relative w-full sm:max-w-md sm:mx-4 rounded-t-[1.75rem] rounded-b-none sm:rounded-3xl overflow-y-auto overflow-x-hidden"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1.5px solid var(--border-soft)',
+          boxShadow: isMobile ? '0 -10px 28px rgba(26,26,26,0.14)' : '0 24px 64px rgba(26,26,26,0.16)',
+          width: '100%',
+          maxWidth: isMobile ? '100vw' : '28rem',
+          maxHeight: isMobile ? '100dvh' : 'min(92dvh, 820px)',
+          overscrollBehavior: 'contain',
+        }}
+      >
+        {/* ─── FORM ─── */}
         {step === 'form' && (
           <>
-            <div className="flex items-center justify-between p-6 border-b border-white/5">
-            <div className="flex items-center gap-3">
-                <BrandMark className="w-9 h-9 object-contain" alt="" />
+            {/* Drag handle — mobile only */}
+            <div className="flex justify-center pt-3 pb-1 sm:hidden">
+              <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border-soft)' }} />
+            </div>
+
+            {/* Header */}
+            <div
+              className="flex items-start justify-between gap-3 px-4 py-4 sm:p-6"
+              style={{ borderBottom: '1px solid var(--border-soft)' }}
+            >
+              <div className="flex items-center gap-3">
+                <BrandMark className="w-8 h-8 sm:w-9 sm:h-9 object-contain" alt="" />
                 <div>
-                  <p className="text-white font-semibold text-sm" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                  <p className="font-semibold text-sm sm:text-base leading-tight" style={{ fontFamily: 'Poppins, sans-serif', color: 'var(--text-primary)' }}>
                     Claim Early Access
                   </p>
-                  <p className="text-xs text-gray-500" style={{ fontFamily: 'Inter, sans-serif' }}>
+                  <p className="text-[10px] sm:text-xs mt-1" style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-muted)' }}>
                     ₹10,000/mo · Limited to 50 cafes
                   </p>
                 </div>
               </div>
-              <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors">
-                <X size={16} className="text-gray-400" />
+              <button
+                onClick={onClose}
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ color: 'var(--text-muted)', background: 'var(--bg-secondary)' }}
+              >
+                <X size={16} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            {/* Form */}
+            <form
+              onSubmit={handleSubmit}
+              className="p-4 sm:p-6 space-y-3 sm:space-y-4"
+              style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+            >
+              {/* Name + Cafe — side by side on sm+ */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <input
                     type="text"
@@ -190,11 +226,12 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps) {
                     value={form.name}
                     onChange={handleChange}
                     placeholder="Your name"
-                    className={inputClass('name')}
-                    style={{ fontFamily: 'Inter, sans-serif' }}
+                    style={{ ...inputErr('name'), minHeight: '48px' }}
+                    onFocus={e => (e.currentTarget.style.borderColor = 'rgba(145,162,79,0.55)')}
+                    onBlur={e => (e.currentTarget.style.borderColor = errors.name ? 'rgba(239,68,68,0.40)' : 'var(--border-soft)')}
                   />
                   {errors.name && (
-                    <p className="text-xs text-red-400 mt-1" style={{ fontFamily: 'Inter, sans-serif' }}>{errors.name}</p>
+                    <p className="text-[10px] sm:text-xs mt-1" style={{ color: '#EF4444', fontFamily: 'Inter, sans-serif' }}>{errors.name}</p>
                   )}
                 </div>
                 <div>
@@ -204,11 +241,12 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps) {
                     value={form.cafe_name}
                     onChange={handleChange}
                     placeholder="Cafe name"
-                    className={inputClass('cafe_name')}
-                    style={{ fontFamily: 'Inter, sans-serif' }}
+                    style={{ ...inputErr('cafe_name'), minHeight: '48px' }}
+                    onFocus={e => (e.currentTarget.style.borderColor = 'rgba(145,162,79,0.55)')}
+                    onBlur={e => (e.currentTarget.style.borderColor = errors.cafe_name ? 'rgba(239,68,68,0.40)' : 'var(--border-soft)')}
                   />
                   {errors.cafe_name && (
-                    <p className="text-xs text-red-400 mt-1" style={{ fontFamily: 'Inter, sans-serif' }}>{errors.cafe_name}</p>
+                    <p className="text-[10px] sm:text-xs mt-1" style={{ color: '#EF4444', fontFamily: 'Inter, sans-serif' }}>{errors.cafe_name}</p>
                   )}
                 </div>
               </div>
@@ -220,11 +258,12 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps) {
                   value={form.phone}
                   onChange={handleChange}
                   placeholder="WhatsApp number (10 digits)"
-                  className={inputClass('phone')}
-                  style={{ fontFamily: 'Inter, sans-serif' }}
+                  style={{ ...inputErr('phone'), minHeight: '48px' }}
+                  onFocus={e => (e.currentTarget.style.borderColor = 'rgba(145,162,79,0.55)')}
+                  onBlur={e => (e.currentTarget.style.borderColor = errors.phone ? 'rgba(239,68,68,0.40)' : 'var(--border-soft)')}
                 />
                 {errors.phone && (
-                  <p className="text-xs text-red-400 mt-1" style={{ fontFamily: 'Inter, sans-serif' }}>{errors.phone}</p>
+                  <p className="text-[10px] sm:text-xs mt-1" style={{ color: '#EF4444', fontFamily: 'Inter, sans-serif' }}>{errors.phone}</p>
                 )}
               </div>
 
@@ -235,11 +274,12 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps) {
                   value={form.city}
                   onChange={handleChange}
                   placeholder="City"
-                  className={inputClass('city')}
-                  style={{ fontFamily: 'Inter, sans-serif' }}
+                  style={{ ...inputErr('city'), minHeight: '48px' }}
+                  onFocus={e => (e.currentTarget.style.borderColor = 'rgba(145,162,79,0.55)')}
+                  onBlur={e => (e.currentTarget.style.borderColor = errors.city ? 'rgba(239,68,68,0.40)' : 'var(--border-soft)')}
                 />
                 {errors.city && (
-                  <p className="text-xs text-red-400 mt-1" style={{ fontFamily: 'Inter, sans-serif' }}>{errors.city}</p>
+                  <p className="text-[10px] sm:text-xs mt-1" style={{ color: '#EF4444', fontFamily: 'Inter, sans-serif' }}>{errors.city}</p>
                 )}
               </div>
 
@@ -250,91 +290,268 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps) {
                   value={form.email}
                   onChange={handleChange}
                   placeholder="Email (optional)"
-                  className={inputClass('email')}
-                  style={{ fontFamily: 'Inter, sans-serif' }}
+                  style={{ ...inputBase, minHeight: '48px' }}
+                  onFocus={e => (e.currentTarget.style.borderColor = 'rgba(145,162,79,0.55)')}
+                  onBlur={e => (e.currentTarget.style.borderColor = 'var(--border-soft)')}
                 />
               </div>
 
+            
+
               <button
                 type="submit"
-                className="group w-full flex items-center justify-center gap-3 py-4 rounded-2xl bg-blue-500 hover:bg-blue-400 text-white font-semibold transition-all duration-200 hover:shadow-xl hover:shadow-blue-500/25 active:scale-[0.98] mt-2"
-                style={{ fontFamily: 'Inter, sans-serif' }}
+                className="group w-full flex items-center justify-center gap-3 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-semibold text-sm sm:text-base transition-all duration-200 active:scale-[0.98] mt-1"
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  background: 'var(--accent-primary)',
+                  color: '#1A1A1A',
+                  boxShadow: '0 4px 20px rgba(145,162,79,0.25)',
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.background = 'var(--accent-hover)';
+                  (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 32px rgba(145,162,79,0.35)';
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.background = 'var(--accent-primary)';
+                  (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(145,162,79,0.25)';
+                }}
               >
-                Continue to Payment
-                <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
+                Continue to UPI Payment
+                <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
               </button>
 
-              <p className="text-center text-xs text-gray-600" style={{ fontFamily: 'Inter, sans-serif' }}>
-                Secure payment via Razorpay · 30-day money-back guarantee
+              <p className="text-center text-[10px] sm:text-xs pb-1" style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-muted)' }}>
+                Secure manual UPI payment · Welcome mail and invoice within 1 hour
               </p>
             </form>
           </>
         )}
 
+        {/* ─── PROCESSING ─── */}
         {step === 'processing' && (
-          <div className="p-12 flex flex-col items-center justify-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-              <Loader size={24} className="text-blue-400 animate-spin" />
+          <div
+            className="p-8 sm:p-12 flex flex-col items-center justify-center gap-4"
+            style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
+          >
+            <div
+              className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl border flex items-center justify-center"
+              style={{ background: 'rgba(145,162,79,0.08)', borderColor: 'rgba(145,162,79,0.25)' }}
+            >
+              <Loader size={22} className="animate-spin" style={{ color: 'var(--accent-primary)' }} />
             </div>
-            <p className="text-white font-medium" style={{ fontFamily: 'Poppins, sans-serif' }}>Setting up your account…</p>
-            <p className="text-sm text-gray-500 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
-              Opening secure payment gateway
+            <p className="font-medium text-sm sm:text-base" style={{ fontFamily: 'Poppins, sans-serif', color: 'var(--text-primary)' }}>
+              Saving your details…
+            </p>
+            <p className="text-xs sm:text-sm text-center" style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-muted)' }}>
+              Preparing your UPI payment screen
             </p>
           </div>
         )}
 
+        {/* ─── PAYMENT ─── */}
+        {step === 'payment' && (
+          <div
+            className="p-4 sm:p-6"
+            style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
+              <div className="min-w-0">
+                <p className="font-semibold text-base sm:text-lg leading-tight" style={{ fontFamily: 'Poppins, sans-serif', color: 'var(--text-primary)' }}>
+                  Scan and pay with any UPI app
+                </p>
+                <p className="text-xs sm:text-sm mt-1 max-w-xs sm:max-w-sm" style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-secondary)' }}>
+                  Use Google Pay, PhonePe, Paytm, BHIM, or any banking app to complete your subscription securely.
+                </p>
+              </div>
+              <div
+                className="w-fit px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-semibold"
+                style={{ background: 'rgba(145,162,79,0.10)', color: 'var(--accent-primary)' }}
+              >
+                {UPI_AMOUNT}
+              </div>
+            </div>
+
+            <div
+              className="rounded-[1.5rem] sm:rounded-[1.75rem] p-3.5 sm:p-5"
+              style={{
+                background: 'linear-gradient(180deg, #ffffff 0%, #f8f8f5 100%)',
+                border: '1px solid rgba(145,162,79,0.16)',
+                boxShadow: isMobile ? '0 10px 24px rgba(145,162,79,0.08)' : '0 20px 40px rgba(145,162,79,0.10)',
+              }}
+            >
+              <img
+                src={UPI_QR_IMAGE}
+                alt="UPI QR code for Coffee on QR payment"
+                className="w-full max-w-[280px] sm:max-w-[320px] mx-auto rounded-[1.1rem] sm:rounded-[1.25rem] object-cover"
+              />
+            </div>
+
+            <div
+              className="mt-4 rounded-2xl p-4"
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-soft)' }}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-[0.18em]" style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-muted)' }}>
+                    UPI ID
+                  </p>
+                  <p className="text-sm sm:text-base font-semibold mt-1 break-all leading-snug" style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-primary)' }}>
+                    {UPI_ID}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={copyUpiId}
+                  className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors"
+                  style={{ background: 'var(--bg-card)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }}
+                >
+                  <Copy size={14} />
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+
+              <div className="mt-3 flex items-start gap-3 rounded-xl p-3" style={{ background: 'rgba(145,162,79,0.06)' }}>
+                <Smartphone size={16} style={{ color: 'var(--accent-primary)', marginTop: '2px', flexShrink: 0 }} />
+                <p className="text-xs sm:text-sm" style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-secondary)' }}>
+                  After payment, tap the confirmation button below. We will mark your payment request as received and our team will send your welcome mail and invoice within an hour.
+                </p>
+              </div>
+
+              {savedOffline && (
+                <div
+                  className="mt-3 rounded-xl p-3"
+                  style={{ background: 'rgba(233,168,124,0.10)', border: '1px solid rgba(233,168,124,0.24)' }}
+                >
+                  <p className="text-xs sm:text-sm" style={{ fontFamily: 'Inter, sans-serif', color: '#8A5A33' }}>
+                    The payment screen is working in backup mode right now. Please add your Vercel Supabase server keys so every signup and payment confirmation is stored live.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div
+              className="mt-5 space-y-3"
+              style={isMobile ? { position: 'sticky', bottom: 0, background: 'linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.97) 18%, rgba(255,255,255,0.97) 100%)', paddingTop: '0.75rem' } : undefined}
+            >
+            
+
+              <button
+                type="button"
+                onClick={handlePaymentConfirmation}
+                disabled={confirmingPayment}
+                className="w-full py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-semibold text-sm sm:text-base transition-all duration-200 active:scale-[0.98]"
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  background: 'var(--accent-primary)',
+                  color: '#1A1A1A',
+                  boxShadow: '0 10px 24px rgba(145,162,79,0.22)',
+                  opacity: confirmingPayment ? 0.8 : 1,
+                }}
+              >
+                {confirmingPayment ? 'Confirming payment…' : 'I’ve completed the payment'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStep('form')}
+                className="w-full py-3.5 rounded-xl text-sm transition-colors"
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  background: 'var(--bg-card)',
+                  border: '1.5px solid var(--border-soft)',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Edit details
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ─── SUCCESS ─── */}
         {step === 'success' && (
-          <div className="p-10 flex flex-col items-center justify-center gap-4 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-              <CheckCircle size={28} className="text-emerald-400" />
+          <div
+            className="p-6 sm:p-10 flex flex-col items-center gap-4 text-center"
+            style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+          >
+            <div
+              className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border flex items-center justify-center"
+              style={{ background: 'rgba(145,162,79,0.08)', borderColor: 'rgba(145,162,79,0.25)' }}
+            >
+              <CheckCircle size={26} style={{ color: 'var(--accent-primary)' }} />
             </div>
             <div>
-              <p className="text-xl font-bold text-white" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                Welcome to Coffee on QR!
+              <p className="text-lg sm:text-xl font-bold leading-tight" style={{ fontFamily: 'Poppins, sans-serif', color: 'var(--text-primary)' }}>
+                Payment request received.
               </p>
-              <p className="text-sm text-gray-400 mt-2 max-w-xs" style={{ fontFamily: 'Inter, sans-serif' }}>
-                You're in! Our team will WhatsApp you within 2 hours to complete your setup.
+              <p className="text-xs sm:text-sm mt-2 max-w-[16rem] sm:max-w-xs" style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-secondary)' }}>
+                Thanks for joining Coffee on QR. You will receive a welcome mail and invoice from our team within an hour.
               </p>
             </div>
-            <div className="w-full p-4 rounded-xl bg-white/[0.03] border border-white/5 mt-2">
-              <p className="text-sm text-gray-300" style={{ fontFamily: 'Inter, sans-serif' }}>
-                Check WhatsApp at{' '}
-                <span className="text-white font-medium">+91 {form.phone}</span>
+            <div className="w-full p-4 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1.5px solid var(--border-soft)' }}>
+              <p className="text-xs sm:text-sm" style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-secondary)' }}>
+                We’ll contact you on WhatsApp at{' '}
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>+91 {form.phone}</span>
                 <br />
-                <span className="text-gray-500 text-xs">for your onboarding link & QR code</span>
+                <span className="text-[10px] sm:text-xs" style={{ color: 'var(--text-muted)' }}>
+                  with onboarding details and your next steps
+                </span>
               </p>
             </div>
             <button
               onClick={onClose}
-              className="w-full py-3.5 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white transition-colors text-sm"
-              style={{ fontFamily: 'Inter, sans-serif' }}
+              className="w-full py-3.5 rounded-xl text-sm transition-colors"
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                background: 'var(--bg-secondary)',
+                border: '1.5px solid var(--border-soft)',
+                color: 'var(--text-secondary)',
+              }}
             >
               Close
             </button>
           </div>
         )}
 
+        {/* ─── ERROR ─── */}
         {step === 'error' && (
-          <div className="p-10 flex flex-col items-center gap-4 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-              <AlertCircle size={24} className="text-red-400" />
+          <div
+            className="p-6 sm:p-10 flex flex-col items-center gap-4 text-center"
+            style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+          >
+            <div
+              className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl border flex items-center justify-center"
+              style={{ background: 'rgba(239,68,68,0.06)', borderColor: 'rgba(239,68,68,0.20)' }}
+            >
+              <AlertCircle size={22} style={{ color: '#EF4444' }} />
             </div>
             <div>
-              <p className="text-lg font-semibold text-white" style={{ fontFamily: 'Poppins, sans-serif' }}>Something went wrong</p>
-              <p className="text-sm text-gray-400 mt-2" style={{ fontFamily: 'Inter, sans-serif' }}>{errorMsg}</p>
+              <p className="text-base sm:text-lg font-semibold" style={{ fontFamily: 'Poppins, sans-serif', color: 'var(--text-primary)' }}>
+                Something went wrong
+              </p>
+              <p className="text-xs sm:text-sm mt-2" style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-secondary)' }}>
+                {errorMsg}
+              </p>
             </div>
             <div className="flex gap-3 w-full">
               <button
                 onClick={() => setStep('form')}
-                className="flex-1 py-3 rounded-xl bg-blue-500 hover:bg-blue-400 text-white text-sm transition-colors"
-                style={{ fontFamily: 'Inter, sans-serif' }}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold transition-colors"
+                style={{ background: 'var(--accent-primary)', color: '#ffffff' }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--accent-hover)'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--accent-primary)'}
               >
                 Try Again
               </button>
               <button
                 onClick={onClose}
-                className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-sm transition-colors"
-                style={{ fontFamily: 'Inter, sans-serif' }}
+                className="flex-1 py-3 rounded-xl text-sm transition-colors"
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  background: 'var(--bg-secondary)',
+                  border: '1.5px solid var(--border-soft)',
+                  color: 'var(--text-secondary)',
+                }}
               >
                 Close
               </button>

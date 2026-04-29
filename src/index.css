@@ -2,11 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   COFFEE ON QR — PASTEL CAFE DESIGN SYSTEM
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+:root {
+  /* Backgrounds */
+  --bg-primary:   #F8F8F5;
+  --bg-secondary: #F1F2EC;
+  --bg-card:      #FFFFFF;
+
+  /* Brand / Accent */
+  --accent-primary:   #91A24F;
+  --accent-hover:     #afbd6b;
+  --accent-soft:      #c4c9ae;
+  --accent-blush:     #ccb2c8;
+
+  /* Text */
+  --text-primary:   #1A1A1A;
+  --text-secondary: #6B7280;
+  --text-muted:     #9CA3AF;
+
+  /* Surfaces */
+  --border-soft: rgba(196, 201, 174, 0.5);
+  --shadow-xs:   0 1px 4px rgba(26,26,26,0.06);
+  --shadow-sm:   0 4px 16px rgba(26,26,26,0.08);
+  --shadow-md:   0 8px 32px rgba(26,26,26,0.10);
+}
+
 @layer base {
-  * {
+  *,
+  *::before,
+  *::after {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     box-sizing: border-box;
+  }
+
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   html {
@@ -14,37 +49,144 @@
   }
 
   body {
-    background-color: #0A0A0A;
-    color: #F9FAFB;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
     font-family: 'Inter', sans-serif;
-    overscroll-behavior: none;
+    overscroll-behavior: auto;
+    overflow-y: auto;
+    min-width: 320px;
   }
 
+  #root {
+    width: 100%;
+    overflow-x: hidden;
+    max-width: 100%;
+    min-height: 100vh;
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  button {
+    min-height: 48px;
+    touch-action: manipulation;
+  }
+
+  /* ✨ Selection */
   ::selection {
-    background: rgba(59, 130, 246, 0.3);
-    color: #fff;
+    background: rgba(145, 162, 79, 0.20);
+    color: #1A1A1A;
   }
 
-  ::-webkit-scrollbar {
-    width: 4px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: #0A0A0A;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: #1F2937;
-    border-radius: 2px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: #374151;
-  }
+  /* 🖱️ Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg-primary); }
+  ::-webkit-scrollbar-thumb { background: var(--accent-soft); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent-primary); }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  /* ── Text ── */
+  .text-accent   { color: var(--accent-primary); }
+  .text-soft     { color: var(--text-secondary); }
+  .text-muted    { color: var(--text-muted); }
+
+  /* ── Backgrounds ── */
+  .bg-page        { background-color: var(--bg-primary); }
+  .bg-section     { background-color: var(--bg-secondary); }
+  .bg-card-white  { background-color: var(--bg-card); }
+
+  /* ── Buttons ── */
+  .btn-primary {
+    background-color: var(--accent-primary);
+    color: #1A1A1A;
+    font-weight: 600;
+    border-radius: 9999px;
+    padding: 0.75rem 1.75rem;
+    transition: all 0.25s ease;
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-primary:hover {
+    background-color: var(--accent-hover);
+    box-shadow: 0 8px 24px rgba(145,162,79,0.28);
+    transform: translateY(-1px);
+  }
+
+  /* ── Cards ── */
+  .card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-soft);
+    border-radius: 1.25rem;
+    box-shadow: var(--shadow-xs);
+  }
+  .card:hover {
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-2px);
+  }
+
+  /* ── Soft divider ── */
+  .divider-soft { border-color: var(--border-soft); }
+
+  /* ── Glow ── */
+  .glow-olive {
+    box-shadow: 0 0 32px rgba(145,162,79,0.18);
+  }
+
+  .section-shell {
+    width: 100%;
+    max-width: 100%;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .section-inner {
+    width: 100%;
+    max-width: 72rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .section-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .section-shell {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

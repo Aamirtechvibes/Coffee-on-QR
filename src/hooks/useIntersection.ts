@@ -5,6 +5,17 @@ export function useIntersection(threshold = 0.15) {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
+    const shouldReduceMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (shouldReduceMotion) {
+      setIsVisible(true);
+      return;
+    }
+
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
     const el = ref.current;
     if (!el) return;
 
@@ -15,7 +26,10 @@ export function useIntersection(threshold = 0.15) {
           observer.disconnect();
         }
       },
-      { threshold }
+      {
+        threshold: isMobile ? Math.min(threshold, 0.08) : threshold,
+        rootMargin: isMobile ? '0px 0px -10% 0px' : '0px',
+      }
     );
 
     observer.observe(el);

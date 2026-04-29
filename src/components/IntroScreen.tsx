@@ -21,13 +21,34 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [phase, setPhase] = useState<'enter' | 'visible' | 'exit'>('enter');
   const [done, setDone] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const syncViewport = () => setIsMobile(window.innerWidth < 768);
+    syncViewport();
+    window.addEventListener('resize', syncViewport, { passive: true });
+    return () => window.removeEventListener('resize', syncViewport);
+  }, []);
+
+  useEffect(() => {
+    const shouldSkipIntro =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (shouldSkipIntro) {
+      setDone(true);
+      onComplete();
+      return;
+    }
+
     if (done) return;
 
-    const enterDuration = 400;
-    const visibleDuration = 900;
-    const exitDuration = 400;
+    const sequence = isMobile ? greetings.slice(0, 3) : greetings;
+    const enterDuration = isMobile ? 240 : 400;
+    const visibleDuration = isMobile ? 420 : 900;
+    const exitDuration = isMobile ? 220 : 400;
 
     let timeout: ReturnType<typeof setTimeout>;
 
@@ -40,11 +61,11 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         timeout = setTimeout(() => {
           setPhase('exit');
           timeout = setTimeout(() => {
-            if (index < greetings.length - 1) {
+            if (index < sequence.length - 1) {
               runCycle(index + 1);
             } else {
               setDone(true);
-              setTimeout(onComplete, 300);
+              setTimeout(onComplete, isMobile ? 150 : 300);
             }
           }, exitDuration);
         }, visibleDuration);
@@ -52,12 +73,11 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
     };
 
     runCycle(0);
-
     return () => clearTimeout(timeout);
-  }, [done, onComplete]);
+  }, [done, isMobile, onComplete]);
 
   const translateY =
-    phase === 'enter' ? 'translateY(28px)' : phase === 'exit' ? 'translateY(-28px)' : 'translateY(0)';
+    phase === 'enter' ? `translateY(${isMobile ? 14 : 28}px)` : phase === 'exit' ? `translateY(-${isMobile ? 14 : 28}px)` : 'translateY(0)';
   const opacity = phase === 'visible' ? 1 : 0;
 
   if (done) return null;
@@ -67,31 +87,25 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
       style={{
         position: 'fixed',
         inset: 0,
-        background: '#0A0A0A',
+        background: 'var(--bg-primary)',
         zIndex: 9999,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: '16px',
+        gap: isMobile ? '12px' : '16px',
+        padding: isMobile ? '24px' : '32px',
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          marginBottom: '32px',
-          opacity: 0.4,
-        }}
-      >
+      {/* Brand */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: isMobile ? '24px' : '32px', opacity: 0.55 }}>
         <BrandMark className="w-7 h-7 object-contain" alt="" />
         <span
           style={{
             fontFamily: 'Inter, sans-serif',
             fontSize: '11px',
             letterSpacing: '0.2em',
-            color: '#6B7280',
+            color: 'var(--text-secondary)',
             textTransform: 'uppercase',
           }}
         >
@@ -99,24 +113,28 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         </span>
       </div>
 
+      {/* Greeting text */}
       <div
         style={{
-          height: '80px',
+          height: isMobile ? '64px' : '80px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
+          minWidth: 0,
         }}
       >
         <span
           style={{
             fontFamily: 'Poppins, sans-serif',
-            fontSize: 'clamp(28px, 8vw, 52px)',
+            fontSize: isMobile ? 'clamp(26px, 8vw, 34px)' : 'clamp(28px, 8vw, 52px)',
             fontWeight: 600,
-            color: '#F9FAFB',
+            color: 'var(--text-primary)',
             opacity,
             transform: translateY,
-            transition: 'opacity 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+            transition: isMobile
+              ? 'opacity 0.22s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)'
+              : 'opacity 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
             display: 'block',
             textAlign: 'center',
             letterSpacing: '-0.01em',
@@ -126,22 +144,17 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         </span>
       </div>
 
-      <div
-        style={{
-          display: 'flex',
-          gap: '6px',
-          marginTop: '40px',
-        }}
-      >
-        {greetings.map((_, i) => (
+      {/* Progress dots */}
+      <div style={{ display: 'flex', gap: '6px', marginTop: isMobile ? '28px' : '40px' }}>
+        {(isMobile ? greetings.slice(0, 3) : greetings).map((_, i) => (
           <div
             key={i}
             style={{
-              width: i === currentIndex ? '20px' : '4px',
+              width: i === currentIndex ? (isMobile ? '16px' : '20px') : '4px',
               height: '4px',
               borderRadius: '2px',
-              background: i === currentIndex ? '#3B82F6' : '#1F2937',
-              transition: 'all 0.4s ease',
+              background: i === currentIndex ? 'var(--accent-primary)' : 'var(--accent-soft)',
+              transition: isMobile ? 'all 0.22s ease' : 'all 0.4s ease',
             }}
           />
         ))}

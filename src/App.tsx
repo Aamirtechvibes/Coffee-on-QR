@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import IntroScreen from './components/IntroScreen';
 import Navigation from './components/Navigation';
 import Hero from './components/Hero';
@@ -20,6 +20,16 @@ export default function App() {
   const [modalOpen, setModalOpen] = useState(false);
   const [contentVisible, setContentVisible] = useState(false);
 
+  useEffect(() => {
+    const shouldShowImmediately =
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (shouldShowImmediately) {
+      setIntroComplete(true);
+      setContentVisible(true);
+    }
+  }, []);
+
   const handleIntroComplete = () => {
     setIntroComplete(true);
     setTimeout(() => setContentVisible(true), 50);
@@ -29,7 +39,7 @@ export default function App() {
   const closeModal = () => setModalOpen(false);
 
   return (
-    <div className="bg-[#0A0A0A] min-h-screen">
+    <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
       {!introComplete && <IntroScreen onComplete={handleIntroComplete} />}
 
       <div

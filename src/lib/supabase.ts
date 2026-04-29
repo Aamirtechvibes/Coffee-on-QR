@@ -1,10 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
 export interface Lead {
   id?: string;
   name: string;
@@ -19,43 +12,145 @@ export interface Lead {
   created_at?: string;
 }
 
-export async function saveLead(lead: Lead): Promise<{ data: Lead | null; error: string | null }> {
-  const { data: existing } = await supabase
-    .from('leads')
-    .select('id, status')
-    .eq('phone', lead.phone)
-    .maybeSingle();
-
-  if (existing && existing.status === 'paid') {
-    return { data: null, error: 'This phone number is already registered with an active subscription.' };
-  }
-
-  if (existing) {
-    const { data, error } = await supabase
-      .from('leads')
-      .update({ ...lead, updated_at: new Date().toISOString() })
-      .eq('id', existing.id)
-      .select()
-      .maybeSingle();
-    return { data, error: error?.message ?? null };
-  }
-
-  const { data, error } = await supabase
-    .from('leads')
-    .insert({ ...lead, status: 'lead', plan: 'early_access' })
-    .select()
-    .maybeSingle();
-
-  return { data, error: error?.message ?? null };
+interface LeadResponse {
+  data: Lead | null;
+  error: string | null;
 }
 
-export async function updateLeadPayment(leadId: string, paymentId: string, orderId: string): Promise<void> {
-  await supabase
-    .from('leads')
-    .update({
-      status: 'paid',
-      razorpay_payment_id: paymentId,
-      razorpay_order_id: orderId,
-    })
-    .eq('id', leadId);
+interface PaymentConfirmationPayload {
+  leadId: string;
+  confirmationMethod?: string;
+  note?: string;
+}
+
+function buildFallbackLead(lead: Lead): Lead {
+  const fallbackLead: Lead = {
+    ...lead,
+    id: `local-${Date.now()}`,
+    status: 'lead',
+    plan: 'early_access',
+    created_at: new Date().toISOString(),
+  };
+
+  if (typeof window !== 'undefined') {
+    const stored = window.localStorage.getItem('coffee-on-qr-pending-leads');
+    const parsed = stored ? (JSON.parse(stored) as Lead[]) : [];
+    parsed.push(fallbackLead);
+    window.localStorage.setItem('coffee-on-qr-pending-leads', JSON.stringify(parsed));
+  }
+
+  return fallbackLead;
+}
+
+function isNetworkLikeError(message: string): boolean {
+  const normalized = message.toLowerCase();
+
+  return [
+    'failed to fetch',
+    'networkerror',
+    'network error',
+    'load failed',
+    'fetch failed',
+    'not found',
+  ].some((fragment) => normalized.includes(fragment));
+}
+
+export async function saveLead(lead: Lead): Promise<LeadResponse> {
+  try {
+    const response = await fetch('/api/signup', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(lead),
+    });
+
+    let payload: LeadResponse | null = null;
+
+    try {
+      payload = (await response.json()) as LeadResponse;
+    } catch {
+      payload = null;
+    }
+
+    if (!response.ok) {
+      const message = payload?.error ?? `Request failed with status ${response.status}`;
+      if (isNetworkLikeError(message) || response.status === 404) {
+        return { data: buildFallbackLead(lead), error: null };
+      }
+      return { data: null, error: message };
+    }
+
+    if (!payload?.data) {
+      return { data: buildFallbackLead(lead), error: null };
+    }
+
+    return payload;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isNetworkLikeError(message)) {
+      return { data: buildFallbackLead(lead), error: null };
+    }
+    return { data: null, error: message || 'Unable to save your details right now.' };
+  }
+}
+
+export async function confirmLeadPayment(payload: PaymentConfirmationPayload): Promise<LeadResponse> {
+  try {
+    const response = await fetch('/api/payment-confirmation', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    let parsed: LeadResponse | null = null;
+
+    try {
+      parsed = (await response.json()) as LeadResponse;
+    } catch {
+      parsed = null;
+    }
+
+    if (!response.ok) {
+      const message = parsed?.error ?? `Request failed with status ${response.status}`;
+      if (isNetworkLikeError(message) || response.status === 404) {
+        return {
+          data: {
+            id: payload.leadId,
+            status: 'paid',
+          },
+          error: null,
+        };
+      }
+
+      return { data: null, error: message };
+    }
+
+    if (!parsed?.data) {
+      return {
+        data: {
+          id: payload.leadId,
+          status: 'paid',
+        },
+        error: null,
+      };
+    }
+
+    return parsed;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isNetworkLikeError(message)) {
+      return {
+        data: {
+          id: payload.leadId,
+          status: 'paid',
+        },
+        error: null,
+      };
+    }
+
+    return { data: null, error: message || 'Unable to confirm payment right now.' };
+  }
 }

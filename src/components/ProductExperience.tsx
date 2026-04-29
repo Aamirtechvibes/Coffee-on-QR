@@ -4,34 +4,65 @@ import BrandMark from './BrandMark';
 
 function LoyaltyCard() {
   return (
-    <div className="bg-[#111] border border-white/8 rounded-3xl p-6 max-w-sm mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div
+      className="rounded-2xl sm:rounded-3xl p-5 sm:p-6 w-full max-w-sm mx-auto"
+      style={{
+        background: 'var(--bg-card)',
+        border: '1.5px solid var(--border-soft)',
+        boxShadow: '0 8px 32px rgba(26,26,26,0.09)',
+      }}
+    >
+      <div className="flex items-center justify-between mb-5 sm:mb-6">
         <div>
-          <p className="text-xs text-gray-500 uppercase tracking-widest" style={{ fontFamily: 'Inter, sans-serif' }}>Coffee on QR</p>
-          <p className="text-lg font-semibold text-white mt-0.5" style={{ fontFamily: 'Poppins, sans-serif' }}>Priya's Cafe Card</p>
+          <p
+            className="text-[10px] sm:text-xs uppercase tracking-widest"
+            style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-muted)' }}
+          >
+            Coffee on QR
+          </p>
+          <p
+            className="text-base sm:text-lg font-semibold mt-0.5"
+            style={{ fontFamily: 'Poppins, sans-serif', color: 'var(--text-primary)' }}
+          >
+            Priya's Cafe Card
+          </p>
         </div>
-        <BrandMark className="w-10 h-10 object-contain" alt="" />
+        <BrandMark className="w-9 h-9 sm:w-10 sm:h-10 object-contain" alt="" />
       </div>
 
-      <div className="mb-6">
+      {/* Progress */}
+      <div className="mb-5 sm:mb-6">
         <div className="flex justify-between items-baseline mb-2">
-          <span className="text-sm text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>Loyalty Points</span>
-          <span className="text-2xl font-bold text-white" style={{ fontFamily: 'Poppins, sans-serif' }}>
-            420 <span className="text-sm font-normal text-gray-500">/ 500</span>
+          <span
+            className="text-xs sm:text-sm"
+            style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-secondary)' }}
+          >
+            Loyalty Points
+          </span>
+          <span
+            className="text-xl sm:text-2xl font-bold"
+            style={{ fontFamily: 'Poppins, sans-serif', color: 'var(--text-primary)' }}
+          >
+            420{' '}
+            <span className="text-xs sm:text-sm font-normal" style={{ color: 'var(--text-muted)' }}>/ 500</span>
           </span>
         </div>
-        <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
+        <div className="h-2 sm:h-2.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-secondary)' }}>
           <div
-            className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-400"
-            style={{ width: '84%' }}
+            className="h-full rounded-full"
+            style={{ width: '84%', background: 'linear-gradient(90deg, #91A24F, #afbd6b)' }}
           />
         </div>
-        <p className="text-xs text-blue-400 mt-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+        <p
+          className="text-[11px] sm:text-xs mt-2 font-medium"
+          style={{ fontFamily: 'Inter, sans-serif', color: 'var(--accent-primary)' }}
+        >
           80 points away from a Free Coffee!
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      {/* Reward tiers */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-5 sm:mb-6">
         {[
           { visits: '5 visits', reward: 'Free Cookie', unlocked: true },
           { visits: '10 visits', reward: 'Free Coffee', unlocked: false },
@@ -39,34 +70,49 @@ function LoyaltyCard() {
         ].map((r) => (
           <div
             key={r.visits}
-            className={`p-3 rounded-xl text-center border ${
-              r.unlocked
-                ? 'border-emerald-500/30 bg-emerald-500/5'
-                : 'border-white/5 bg-white/[0.02]'
-            }`}
+            className="p-2.5 sm:p-3 rounded-xl text-center"
+            style={{
+              border: r.unlocked ? '1px solid rgba(145,162,79,0.30)' : '1px solid var(--border-soft)',
+              background: r.unlocked ? 'rgba(145,162,79,0.07)' : 'var(--bg-secondary)',
+            }}
           >
             {r.unlocked ? (
-              <CheckCircle size={16} className="text-emerald-400 mx-auto mb-1" />
+              <CheckCircle size={14} className="mx-auto mb-1" style={{ color: 'var(--accent-primary)' }} />
             ) : (
-              <Gift size={16} className="text-gray-600 mx-auto mb-1" />
+              <Gift size={14} className="mx-auto mb-1" style={{ color: 'var(--text-muted)' }} />
             )}
-            <p className="text-[10px] text-gray-500 leading-tight" style={{ fontFamily: 'Inter, sans-serif' }}>{r.visits}</p>
-            <p className={`text-[10px] font-medium mt-0.5 leading-tight ${r.unlocked ? 'text-emerald-400' : 'text-gray-400'}`} style={{ fontFamily: 'Inter, sans-serif' }}>
+            <p
+              className="text-[9px] sm:text-[10px] leading-tight"
+              style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-muted)' }}
+            >
+              {r.visits}
+            </p>
+            <p
+              className="text-[9px] sm:text-[10px] font-semibold mt-0.5 leading-tight"
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                color: r.unlocked ? 'var(--accent-primary)' : 'var(--text-secondary)',
+              }}
+            >
               {r.reward}
             </p>
           </div>
         ))}
       </div>
 
-      <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-500/5 border border-amber-500/15">
-        <Star size={14} className="text-amber-400 flex-shrink-0" />
-        <p className="text-xs text-amber-300/80" style={{ fontFamily: 'Inter, sans-serif' }}>
+      {/* Bonus nudge */}
+      <div
+        className="flex items-center gap-2.5 sm:gap-3 p-3 rounded-xl"
+        style={{ background: 'rgba(233,168,124,0.08)', border: '1px solid rgba(233,168,124,0.22)' }}
+      >
+        <Star size={13} style={{ color: '#E9A87C', flexShrink: 0 }} />
+        <p className="text-[11px] sm:text-xs" style={{ fontFamily: 'Inter, sans-serif', color: '#D97706' }}>
           Visit again this week for a <strong>2x points bonus</strong>
         </p>
       </div>
 
-      <div className="mt-4 text-center">
-        <p className="text-xs text-gray-600" style={{ fontFamily: 'Inter, sans-serif' }}>
+      <div className="mt-3 sm:mt-4 text-center">
+        <p className="text-[10px] sm:text-xs" style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-muted)' }}>
           Member since March 2024 · 14 total visits
         </p>
       </div>
@@ -78,31 +124,43 @@ export default function ProductExperience() {
   const { ref, isVisible } = useIntersection();
 
   return (
-    <section className="bg-[#080808] py-28 px-5">
+    <section className="py-16 sm:py-20 md:py-28 px-4 sm:px-6" style={{ background: 'var(--bg-secondary)' }}>
       <div ref={ref} className="max-w-5xl mx-auto">
-        <div className="grid md:grid-cols-2 gap-16 items-center">
+        {/* Card first on mobile, text first on desktop */}
+        <div className="grid md:grid-cols-2 gap-10 sm:gap-14 md:gap-16 items-center">
+
+          {/* On mobile: show card first using order */}
           <div
-            className={`transition-all duration-700 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'}`}
+            className={`order-2 md:order-1 transition-all duration-700 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'}`}
           >
-            <span className="text-xs uppercase tracking-widest text-gray-600 font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <span
+              className="text-[10px] sm:text-xs uppercase tracking-widest font-semibold"
+              style={{ fontFamily: 'Inter, sans-serif', color: 'var(--accent-primary)' }}
+            >
               What Your Customer Sees
             </span>
             <h2
-              className="text-4xl md:text-5xl font-bold text-white mt-4 leading-tight"
-              style={{ fontFamily: 'Poppins, sans-serif' }}
+              className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 sm:mt-4 leading-tight"
+              style={{ fontFamily: 'Poppins, sans-serif', color: 'var(--text-primary)' }}
             >
               A loyalty card
               <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-blue-600">
+              <span
+                className="text-transparent bg-clip-text"
+                style={{ backgroundImage: 'linear-gradient(135deg, #91A24F, #afbd6b)' }}
+              >
                 they actually use.
               </span>
             </h2>
-            <p className="text-gray-400 mt-5 leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <p
+              className="mt-4 sm:mt-5 leading-relaxed text-sm sm:text-base"
+              style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-secondary)' }}
+            >
               No plastic cards. No apps to download. The entire loyalty experience lives in the browser —
               scannable in seconds, beautiful to use.
             </p>
 
-            <ul className="mt-8 space-y-4">
+            <ul className="mt-6 sm:mt-8 space-y-3 sm:space-y-4">
               {[
                 'Real-time points balance after every visit',
                 'Visual progress toward the next reward',
@@ -110,18 +168,24 @@ export default function ProductExperience() {
                 'Instant redemption — no staff training needed',
               ].map((f) => (
                 <li key={f} className="flex items-start gap-3">
-                  <CheckCircle size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
-                  <span className="text-gray-300 text-sm" style={{ fontFamily: 'Inter, sans-serif' }}>{f}</span>
+                  <CheckCircle size={15} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-primary)' }} />
+                  <span
+                    className="text-sm"
+                    style={{ fontFamily: 'Inter, sans-serif', color: 'var(--text-secondary)' }}
+                  >
+                    {f}
+                  </span>
                 </li>
               ))}
             </ul>
           </div>
 
           <div
-            className={`transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8'}`}
+            className={`order-1 md:order-2 transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8'}`}
           >
             <LoyaltyCard />
           </div>
+
         </div>
       </div>
     </section>
